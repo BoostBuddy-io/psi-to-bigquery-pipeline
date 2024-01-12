@@ -1,7 +1,9 @@
 import os
 import json
-import urllib.request
+import argparse
 import pandas as pd
+import urllib.request
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 from google.cloud import bigquery
 
@@ -32,25 +34,53 @@ def speed_test(url, strategy):
     row = {}
 
     for v in vitals:
-        row[f'{v} - time'] = f'{vitals[v]["numericValue"] / 1000}s'
-        row[f'{v} - score'] = f'{vitals[v]["score"] * 100}%'
+        row[f'{v}_time'] = f'{round(vitals[v]["numericValue"] / 1000, 4)}s'
+        row[f'{v}_score'] = f'{round(vitals[v]["score"] * 100, 2)}%'
 
     df = pd.DataFrame([row])
 
     return df
 
-url = 'https://foodready.ai/'
-df = speed_test(url, 'mobile')
+def write_to_bq(dataset_id, table_id, dataframe):
 
-client = bigquery.Client(location='US')
-print("Client creating using default project: {}".format(client.project))
+    client = bigquery.Client(location='US')
+    print("Client creating using default project: {}".format(client.project))
 
-# dataset_id = 'psi_test_data'
-# dataset = client.create_dataset(dataset_id)
+    dataset_ref = client.dataset(dataset_id)
 
-# table_ref = dataset.table(dataset_id)
-# job = client.load_table_from_dataframe(df, table_ref, location='US')
-# job.result()
-# print("Loaded dataframe to {}".format(table_ref.path))
+    try:
+        client.create_dataset(dataset_id)
+    except:
+        client.get_dataset(dataset_ref)
+    
+    table_ref = dataset_ref.table(table_id)
+    job = client.load_table_from_dataframe(dataframe, table_ref, location='US')
+    job.result()
+    print("Loaded dataframe to {}".format(table_ref.path))
 
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(
+        description='Audit webpage on PageSpeed Insights and store results in BigQuery dataset'
+    )
+
+    parser.add_argument(
+        '-u',
+        '--url',
+        required=True,
+        type=str,
+        help='Provide URL to audit'
+    )
+
+    args = parser.parse_args()
+
+    dataset_id = urlparse(args.url).netloc.split('.')[0]
+    if '-' in dataset_id:
+        dataset_id = dataset_id.replace('-', '_')
+        
+    strategies = ['mobile', 'desktop']
+    for strategy in strategies:
+        df = speed_test(args.url, strategy)
+        table_id = f'{dataset_id}_{strategy}'
+        write_to_bq(dataset_id, table_id, df)
 
