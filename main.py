@@ -51,7 +51,7 @@ def write_to_bq(dataset_id, table_id, dataframe):
     try:
         client.create_dataset(dataset_id)
     except:
-        client.get_dataset(dataset_ref)
+        print('Writing to an existing dataset.')
     
     table_ref = dataset_ref.table(table_id)
     job = client.load_table_from_dataframe(dataframe, table_ref, location='US')
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     dataset_id = urlparse(args.url).netloc.split('.')[0]
     if '-' in dataset_id:
         dataset_id = dataset_id.replace('-', '_')
-        
+
     strategies = ['mobile', 'desktop']
     for strategy in strategies:
         df = speed_test(args.url, strategy)
